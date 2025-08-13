@@ -1,0 +1,10 @@
+pandas
+streamlit
+plotly
+numpy
+matplotlib
+streamlit-lottie
+pyngrok
+streamlit-authenticator>=0.3.2
+streamlit-oauth
+PyYAML

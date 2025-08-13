@@ -1,0 +1,13 @@
+#[theme]
+#primaryColor = "#1B5E20"
+#backgroundColor = "#F1F8E9"
+#secondaryBackgroundColor = "#C8E6C9"
+#textColor = "#212121"
+#font = "sans serif"
+
+[theme]
+primaryColor="#1E88E5"  # A professional blue
+backgroundColor="#F5F5F5"  # A light grey background
+secondaryBackgroundColor="#FFFFFF" # White for containers, cards, etc.
+textColor="#333333" # A dark grey for text
+font="sans serif"

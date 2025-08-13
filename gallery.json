@@ -1,0 +1,31 @@
+[
+    {
+        "team_name": "Indy Indians Cricket Club ",
+        "description": "Successfully hosted 5th edition of Cricket tournament using  Cricket planner app.",
+        "image_path": "gallery_images/Indy_Indians_Cricket_Club__WhatsApp Image 2025-08-10 at 12.37.04 PM.jpeg"
+    },
+    {
+        "team_name": "Indy Indians Cricket Club 2025",
+        "description": "",
+        "image_paths": [
+            "gallery_images/Indy_Indians_Cricket_Club_2025_WhatsApp Image 2025-08-10 at 1.40.32 AM.jpeg"
+        ],
+        "comments": [
+            {
+                "commenter": "Rahul",
+                "comment": "Thanks to Cricket planner app to make this tournament huge success",
+                "timestamp": 1754965531.861613
+            }
+        ]
+    },
+    {
+        "team_name": "Indy Indians Cricket Club 2025",
+        "description": "",
+        "image_paths": [
+            "gallery_images/Indy_Indians_Cricket_Club_2025_WhatsApp Image 2025-08-10 at 1.40.32 AM.jpeg",
+            "gallery_images/Indy_Indians_Cricket_Club_2025_WhatsApp Image 2025-08-10 at 1.40.31 AM.jpeg",
+            "gallery_images/Indy_Indians_Cricket_Club_2025_WhatsApp Image 2025-08-10 at 12.37.03 PM.jpeg",
+            "gallery_images/Indy_Indians_Cricket_Club_2025_WhatsApp Image 2025-08-10 at 12.37.04 PM.jpeg"
+        ]
+    }
+]
