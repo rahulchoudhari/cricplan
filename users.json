@@ -1,22 +1,14 @@
 {
     "rahul": {
-        "password": "af4a400a2ceb7963a424d9cf3779175c8d258facf8a31ee8bc1949dc060e10e6",
-        "role": "Admin"
+        "email": "rahul",
+        "role": "Admin",
+        "approved": true,
+        "password_hash": "687f6da20de59091e67f594827cdee268125feb3aed1c3bad77d0f6761eb198a"
     },
-    "Supernova": {
-        "password": "e498423d689178b7ee79bf9e9f61308b9bc47ce78a16f8fc517e5793ae74d116",
-        "role": "Team Manager"
-    },
-    "uddavejajoo20": {
-        "password": "40f3d6fd5793596648ff7b5162fd560aff031f5e480e39dd010c075950806b6c",
-        "role": "Player"
-    },
-    "uddavejajoo": {
-        "password": "40f3d6fd5793596648ff7b5162fd560aff031f5e480e39dd010c075950806b6c",
-        "role": "Planner"
-    },
-    "Pushkarmisra48": {
-        "password": "9233b878a8c3d06dec36ee3cec633371b36cbd3b2f9c1acd8a2dbe9ba36d988f",
-        "role": "Planner"
+    "rc1": {
+        "email": "rc1@gmail.com",
+        "role": "Tournament Organizer",
+        "approved": true,
+        "password_hash": "1dad7a7d80bd069ab4680b22a03b3df6a40703cf78c7ced3a7f9c1f33f41234b"
     }
 }
