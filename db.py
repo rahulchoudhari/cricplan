@@ -19,6 +19,7 @@ be browsed and linked to by name alone, with no "by <owner>" qualifier
 needed to tell two tournaments apart.
 """
 import json
+from datetime import date as _date, datetime as _datetime
 
 import streamlit as st
 from sqlalchemy import create_engine, text
@@ -62,6 +63,24 @@ def _table_columns(conn, engine: Engine, table: str) -> set[str]:
         "SELECT column_name FROM information_schema.columns WHERE table_name = :t"
     ), {"t": table}).all()
     return {r[0] for r in rows}
+
+
+def _ensure_column(conn, engine: Engine, table: str, column: str, coltype: str) -> None:
+    if column not in _table_columns(conn, engine, table):
+        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {coltype}"))
+
+
+def _norm_date(value):
+    """SQLite returns DATE columns as plain ISO strings; Postgres returns
+    native date objects. Normalize to one type so callers don't care."""
+    if value is None or isinstance(value, _date):
+        return value
+    if isinstance(value, str):
+        try:
+            return _datetime.strptime(value[:10], "%Y-%m-%d").date()
+        except ValueError:
+            return None
+    return None
 
 
 @st.cache_resource(show_spinner=False)
@@ -118,6 +137,20 @@ def init_db() -> Engine:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """))
+        # A Manager is assigned to specific tournaments by that tournament's
+        # owner (organizer/admin) — never self-selected — and can be
+        # assigned to more than one, hence a separate join table rather than
+        # a single linked_tournament_id column like Team Captain/Player use.
+        conn.execute(text(f"""
+            CREATE TABLE IF NOT EXISTS tournament_managers (
+                id {pk},
+                tournament_id INTEGER NOT NULL,
+                username TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(tournament_id, username)
+            )
+        """))
+        _ensure_column(conn, engine, "tournament_data", "tournament_date", "DATE")
         _migrate_legacy_single_tournament_schema(conn, engine, pk, bool_col)
     return engine
 
@@ -296,9 +329,11 @@ def set_password(username: str, password_hash: str) -> None:
 def delete_user(username: str) -> None:
     engine = init_db()
     with engine.begin() as conn:
-        # Cascade: drop any teams captained by this account so they don't
-        # linger as orphans pointing at a deleted user.
+        # Cascade: drop any teams captained by this account, and any
+        # tournament-manager assignments, so they don't linger as orphans
+        # pointing at a deleted user.
         conn.execute(text("DELETE FROM teams WHERE captain_username = :u"), {"u": username})
+        conn.execute(text("DELETE FROM tournament_managers WHERE username = :u"), {"u": username})
         conn.execute(text("DELETE FROM users WHERE username = :u"), {"u": username})
 
 
@@ -409,24 +444,82 @@ def rename_tournament(tournament_id: int, new_name: str) -> bool:
     return True
 
 
+def set_tournament_date(tournament_id: int, tournament_date) -> None:
+    engine = init_db()
+    with engine.begin() as conn:
+        conn.execute(text(
+            "UPDATE tournament_data SET tournament_date = :d, updated_at = CURRENT_TIMESTAMP WHERE id = :id"
+        ), {"d": tournament_date, "id": tournament_id})
+
+
 def get_tournament(tournament_id: int) -> dict | None:
     if not tournament_id:
         return None
     engine = init_db()
     with engine.connect() as conn:
         row = conn.execute(text(
-            "SELECT id, owner_username, tournament_name, updated_at FROM tournament_data WHERE id = :id"
+            "SELECT id, owner_username, tournament_name, tournament_date, updated_at FROM tournament_data WHERE id = :id"
         ), {"id": tournament_id}).mappings().first()
-    return dict(row) if row else None
+    if not row:
+        return None
+    d = dict(row)
+    d["tournament_date"] = _norm_date(d["tournament_date"])
+    return d
 
 
 def get_tournaments_for_owner(owner_username: str) -> list[dict]:
     engine = init_db()
     with engine.connect() as conn:
+        rows = conn.execute(text("""
+            SELECT id, tournament_name, tournament_date FROM tournament_data WHERE owner_username = :ou
+            ORDER BY (tournament_date IS NULL), tournament_date, tournament_name
+        """), {"ou": owner_username}).mappings().all()
+    result = [dict(r) for r in rows]
+    for r in result:
+        r["tournament_date"] = _norm_date(r["tournament_date"])
+    return result
+
+
+def get_tournaments_for_manager(username: str) -> list[dict]:
+    engine = init_db()
+    with engine.connect() as conn:
+        rows = conn.execute(text("""
+            SELECT t.id, t.tournament_name, t.tournament_date, t.owner_username
+            FROM tournament_data t
+            JOIN tournament_managers m ON m.tournament_id = t.id
+            WHERE m.username = :u
+            ORDER BY (t.tournament_date IS NULL), t.tournament_date, t.tournament_name
+        """), {"u": username}).mappings().all()
+    result = [dict(r) for r in rows]
+    for r in result:
+        r["tournament_date"] = _norm_date(r["tournament_date"])
+    return result
+
+
+def get_managers_for_tournament(tournament_id: int) -> list[str]:
+    engine = init_db()
+    with engine.connect() as conn:
         rows = conn.execute(text(
-            "SELECT id, tournament_name FROM tournament_data WHERE owner_username = :ou ORDER BY tournament_name"
-        ), {"ou": owner_username}).mappings().all()
-    return [dict(r) for r in rows]
+            "SELECT username FROM tournament_managers WHERE tournament_id = :tid ORDER BY username"
+        ), {"tid": tournament_id}).all()
+    return [r[0] for r in rows]
+
+
+def add_manager(tournament_id: int, username: str) -> None:
+    engine = init_db()
+    with engine.begin() as conn:
+        conn.execute(text("""
+            INSERT INTO tournament_managers (tournament_id, username) VALUES (:tid, :u)
+            ON CONFLICT (tournament_id, username) DO NOTHING
+        """), {"tid": tournament_id, "u": username})
+
+
+def remove_manager(tournament_id: int, username: str) -> None:
+    engine = init_db()
+    with engine.begin() as conn:
+        conn.execute(text(
+            "DELETE FROM tournament_managers WHERE tournament_id = :tid AND username = :u"
+        ), {"tid": tournament_id, "u": username})
 
 
 def load_tournament_data(tournament_id: int) -> dict:
@@ -456,26 +549,33 @@ def save_tournament_data(tournament_id: int, data: dict) -> None:
 
 
 def list_tournaments() -> list[dict]:
-    """Every tournament in the app — for public browsing, registration, and admin management."""
+    """Every tournament in the app — for public browsing, registration, and admin management.
+    Ordered chronologically (undated tournaments last) rather than alphabetically, so the
+    picker stays browsable as tournaments accumulate across seasons."""
     engine = init_db()
     with engine.connect() as conn:
-        rows = conn.execute(text(
-            "SELECT id, owner_username, tournament_name FROM tournament_data ORDER BY tournament_name"
-        )).mappings().all()
-    return [dict(r) for r in rows]
+        rows = conn.execute(text("""
+            SELECT id, owner_username, tournament_name, tournament_date FROM tournament_data
+            ORDER BY (tournament_date IS NULL), tournament_date, tournament_name
+        """)).mappings().all()
+    result = [dict(r) for r in rows]
+    for r in result:
+        r["tournament_date"] = _norm_date(r["tournament_date"])
+    return result
 
 
 def delete_tournament(tournament_id: int) -> None:
     """Deletes a tournament and everything scoped to it: the tournament
     data itself (teams list, groups, schedule, results, knockout bracket,
-    checklist, flyer), self-registered teams, and sponsors. Team
-    captains/players linked to it keep their accounts but are unlinked,
-    since the tournament they joined no longer exists."""
+    checklist, flyer), self-registered teams, sponsors, and manager
+    assignments. Team captains/players linked to it keep their accounts
+    but are unlinked, since the tournament they joined no longer exists."""
     engine = init_db()
     with engine.begin() as conn:
         conn.execute(text("DELETE FROM tournament_data WHERE id = :id"), {"id": tournament_id})
         conn.execute(text("DELETE FROM teams WHERE tournament_id = :id"), {"id": tournament_id})
         conn.execute(text("DELETE FROM sponsors WHERE tournament_id = :id"), {"id": tournament_id})
+        conn.execute(text("DELETE FROM tournament_managers WHERE tournament_id = :id"), {"id": tournament_id})
         conn.execute(text(
             "UPDATE users SET linked_tournament_id = NULL WHERE linked_tournament_id = :id"
         ), {"id": tournament_id})

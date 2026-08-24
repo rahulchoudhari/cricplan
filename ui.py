@@ -10,6 +10,7 @@ import streamlit as st
 ROLE_STYLES = {
     "Admin": ("#7C2D12", "#FEF3C7", "cric-badge-admin"),
     "Tournament Organizer": ("#1E3A8A", "#DBEAFE", "cric-badge-organizer"),
+    "Manager": ("#5B21B6", "#EDE9FE", "cric-badge-manager"),
     "Team Captain": ("#065F46", "#D1FAE5", "cric-badge-captain"),
     "Player": ("#334155", "#E2E8F0", "cric-badge-player"),
 }
@@ -20,6 +21,13 @@ LOGO_PATH = Path(__file__).parent / "assets" / "logo_small.png"
 def esc(value) -> str:
     """Escape user-controlled text before it goes into raw HTML."""
     return html.escape(str(value), quote=True)
+
+
+def tournament_option_label(t: dict) -> str:
+    """Display label for a tournament in a picker: name, plus its date if
+    set, so pickers stay browsable once several seasons' worth pile up."""
+    date = t.get("tournament_date")
+    return f"{t['tournament_name']} — {date.strftime('%b %d, %Y')}" if date else t["tournament_name"]
 
 
 def sanitize_url(url: str | None) -> str | None:
@@ -60,6 +68,7 @@ def inject_global_css() -> None:
         [data-testid="stSidebar"] * { color: #E2E8F0 !important; }
         [data-testid="stSidebar"] .cric-badge-admin { color: #7C2D12 !important; background: #FEF3C7 !important; }
         [data-testid="stSidebar"] .cric-badge-organizer { color: #1E3A8A !important; background: #DBEAFE !important; }
+        [data-testid="stSidebar"] .cric-badge-manager { color: #5B21B6 !important; background: #EDE9FE !important; }
         [data-testid="stSidebar"] .cric-badge-captain { color: #065F46 !important; background: #D1FAE5 !important; }
         [data-testid="stSidebar"] .cric-badge-player { color: #334155 !important; background: #E2E8F0 !important; }
         [data-testid="stSidebar"] input {
@@ -292,4 +301,13 @@ def guard_organizer() -> None:
     guard_login()
     if st.session_state.get("role") not in ("Admin", "Tournament Organizer"):
         st.warning("This page is for tournament organizers only.", icon="🔒")
+        st.stop()
+
+
+def guard_can_manage() -> None:
+    """Like guard_organizer(), but also admits a Manager working on a
+    tournament they've been assigned to."""
+    guard_login()
+    if st.session_state.get("role") not in ("Admin", "Tournament Organizer", "Manager"):
+        st.warning("This page is for tournament organizers and managers only.", icon="🔒")
         st.stop()

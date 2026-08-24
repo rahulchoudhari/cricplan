@@ -9,18 +9,28 @@ import db
 # --- Tournament context ---------------------------------------------------
 
 def get_active_tournament_id():
-    """An organizer/admin can own several tournaments; `active_tournament_id`
-    is whichever one they're currently working on (switchable on Tournament
-    Setup). Team Captains/Players are linked to the single tournament they
-    joined at signup. A visitor who isn't logged in views whichever
-    tournament they picked from the sidebar's public browser (see
-    sidebar.py)."""
+    """An organizer/admin can own several tournaments, and a Manager can be
+    assigned to several more (by an owner, never self-selected) — for both,
+    `active_tournament_id` is whichever one they're currently working on,
+    switchable on Tournament Setup. Team Captains/Players are linked to the
+    single tournament they joined at signup. A visitor who isn't logged in
+    views whichever tournament they picked from the sidebar's public
+    browser (see sidebar.py)."""
     role = st.session_state.get('role')
-    if role in ("Admin", "Tournament Organizer"):
+    if role in ("Admin", "Tournament Organizer", "Manager"):
         return st.session_state.get('active_tournament_id')
     if role in ("Team Captain", "Player"):
         return st.session_state.get('linked_tournament_id')
     return st.session_state.get('public_tournament_id')
+
+
+def can_manage_tournament():
+    """Broader than is_organizer(): also lets a Manager operate on the
+    tournament they're currently switched to (schedule, teams, resources,
+    results, knockout, checklist, waiver, sponsors/flyer) — but never
+    account approvals, tournament create/rename/delete, or Manager
+    assignment itself, which stay Admin/Organizer-only."""
+    return st.session_state.get('role') in ("Admin", "Tournament Organizer", "Manager")
 
 
 def save_tourney_data():

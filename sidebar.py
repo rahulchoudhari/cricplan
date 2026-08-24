@@ -37,7 +37,7 @@ def render() -> None:
 
                 st.markdown("**👀 Browse a Tournament**")
                 st.caption("View the schedule, results, and bracket — no login needed.")
-                names = [t['tournament_name'] for t in tournaments]
+                names = [ui.tournament_option_label(t) for t in tournaments]
                 ids = [t['id'] for t in tournaments]
                 current_id = st.session_state.public_tournament_id
                 default_idx = ids.index(current_id) if current_id in ids else 0
@@ -71,6 +71,9 @@ def render() -> None:
                                 if user['role'] in ("Admin", "Tournament Organizer"):
                                     owned = db.get_tournaments_for_owner(user['username'])
                                     st.session_state.active_tournament_id = owned[0]['id'] if owned else None
+                                elif user['role'] == "Manager":
+                                    assigned = db.get_tournaments_for_manager(user['username'])
+                                    st.session_state.active_tournament_id = assigned[0]['id'] if assigned else None
                                 load_tournament_state()
                                 clear_tournament_widget_cache()
                                 st.rerun()
@@ -78,16 +81,18 @@ def render() -> None:
                             st.error("Invalid username or password.")
 
             with register_tab:
-                reg_role = st.selectbox("Role", ["Player", "Team Captain", "Tournament Organizer", "Admin"], key="reg_role")
+                reg_role = st.selectbox("Role", ["Player", "Team Captain", "Manager", "Tournament Organizer", "Admin"], key="reg_role")
                 reg_tournament_id = None
                 needs_tournament = reg_role in ("Player", "Team Captain")
                 if needs_tournament:
                     if tournaments:
-                        names = [t['tournament_name'] for t in tournaments]
+                        names = [ui.tournament_option_label(t) for t in tournaments]
                         picked = st.selectbox("Which tournament are you joining?", names, key="reg_tournament")
                         reg_tournament_id = tournaments[names.index(picked)]['id']
                     else:
                         st.info("No tournaments exist yet. Ask your organizer to set one up first, then register.")
+                elif reg_role == "Manager":
+                    st.info("A tournament organizer assigns you to specific tournament(s) after your account is approved.")
 
                 with st.form("register_form"):
                     reg_username = st.text_input("Username", help="3-20 characters: letters, numbers, _ or -")
