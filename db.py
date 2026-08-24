@@ -23,6 +23,7 @@ import json
 import streamlit as st
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
+from sqlalchemy.pool import NullPool
 
 
 @st.cache_resource(show_spinner=False)
@@ -34,7 +35,15 @@ def get_engine() -> Engine:
         url = None
 
     if url:
-        return create_engine(url, pool_pre_ping=True)
+        # NullPool: opens a fresh connection per checkout instead of
+        # reusing pooled ones. Hosted poolers (Supabase's pgbouncer in
+        # particular) can silently drop or recycle backend connections
+        # between requests in ways a long-lived SQLAlchemy pool doesn't
+        # always detect even with pool_pre_ping, surfacing as an opaque
+        # OperationalError on whatever query runs next. A low-traffic
+        # Streamlit app doesn't need connection reuse badly enough to be
+        # worth that fragility.
+        return create_engine(url, poolclass=NullPool, pool_pre_ping=True)
     return create_engine("sqlite:///cricplan.db", connect_args={"check_same_thread": False})
 
 

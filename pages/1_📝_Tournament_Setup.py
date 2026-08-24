@@ -165,11 +165,15 @@ with st.expander("⚠️ Danger Zone"):
     current_name = st.session_state.tournament_name
     confirm = st.text_input(f'Type "{current_name}" to confirm deletion', key="delete_tournament_confirm")
     if st.button("Delete This Tournament", type="primary", disabled=(confirm != current_name)):
-        db.delete_tournament(active_id)
-        remaining = [t for t in my_tournaments if t['id'] != active_id]
-        st.session_state.active_tournament_id = remaining[0]['id'] if remaining else None
-        st.session_state.tournament_name = "New Tournament"
-        load_tournament_state()
-        clear_tournament_widget_cache()
-        st.success("Tournament deleted.")
-        st.rerun()
+        try:
+            db.delete_tournament(active_id)
+        except Exception as e:
+            st.error(f"Delete failed: {e}")
+        else:
+            remaining = [t for t in my_tournaments if t['id'] != active_id]
+            st.session_state.active_tournament_id = remaining[0]['id'] if remaining else None
+            st.session_state.tournament_name = "New Tournament"
+            load_tournament_state()
+            clear_tournament_widget_cache()
+            st.success("Tournament deleted.")
+            st.rerun()

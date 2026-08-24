@@ -90,15 +90,19 @@ if tournaments:
                 )
             with c3:
                 if st.button("🗑️ Delete", key=f"delete_tourney_{t['id']}", width='stretch', disabled=(confirm != t['tournament_name'])):
-                    db.delete_tournament(t['id'])
-                    if t['id'] == get_active_tournament_id():
-                        remaining = [x for x in db.get_tournaments_for_owner(me) if x['id'] != t['id']]
-                        st.session_state.active_tournament_id = remaining[0]['id'] if remaining else None
-                        st.session_state.tournament_name = "New Tournament"
-                        load_tournament_state()
-                        clear_tournament_widget_cache()
-                    st.success(f"Tournament '{t['tournament_name']}' deleted.")
-                    st.rerun()
+                    try:
+                        db.delete_tournament(t['id'])
+                    except Exception as e:
+                        st.error(f"Delete failed: {e}")
+                    else:
+                        if t['id'] == get_active_tournament_id():
+                            remaining = [x for x in db.get_tournaments_for_owner(me) if x['id'] != t['id']]
+                            st.session_state.active_tournament_id = remaining[0]['id'] if remaining else None
+                            st.session_state.tournament_name = "New Tournament"
+                            load_tournament_state()
+                            clear_tournament_widget_cache()
+                        st.success(f"Tournament '{t['tournament_name']}' deleted.")
+                        st.rerun()
 else:
     ui.empty_state("No tournaments exist yet.")
 
