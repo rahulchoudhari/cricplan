@@ -137,6 +137,11 @@ def inject_global_css() -> None:
             height: 56px; width: auto; max-width: 160px; object-fit: contain;
             filter: grayscale(15%);
         }
+        .cric-sponsor-text {
+            font-weight: 700; font-size: 1.05rem; color: #334155;
+            white-space: nowrap; padding: 0.4rem 0.9rem;
+            border: 1.5px solid #E2E8F0; border-radius: 999px;
+        }
         @keyframes cric-scroll {
             from { transform: translateX(0); }
             to { transform: translateX(-50%); }
@@ -208,9 +213,12 @@ def sponsor_carousel(sponsors: list[dict]) -> None:
         return
     tiles = []
     for s in sponsors:
-        img = f'<img src="data:image/png;base64,{s["image_data"]}" alt="{esc(s["sponsor_name"])}" title="{esc(s["sponsor_name"])}">'
+        if s.get("image_data"):
+            content = f'<img src="data:image/png;base64,{s["image_data"]}" alt="{esc(s["sponsor_name"])}" title="{esc(s["sponsor_name"])}">'
+        else:
+            content = f'<span class="cric-sponsor-text">{esc(s["sponsor_name"])}</span>'
         link = sanitize_url(s.get("link_url"))
-        tiles.append(f'<a href="{esc(link)}" target="_blank" rel="noopener noreferrer">{img}</a>' if link else img)
+        tiles.append(f'<a href="{esc(link)}" target="_blank" rel="noopener noreferrer">{content}</a>' if link else content)
     track_html = "".join(tiles) * 2  # duplicated for a seamless loop
     st.markdown(
         f"""

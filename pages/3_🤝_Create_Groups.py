@@ -22,7 +22,7 @@ max_g = len(st.session_state.teams) // 3
 if max_g == 0 and len(st.session_state.teams) > 0:
     max_g = 1
 num_g = st.number_input("Number of groups", 1, max(1, max_g), min(2, max(1, max_g)), disabled=(len(st.session_state.teams) < 3))
-if st.button("Generate Groups", type="primary", use_container_width=True, disabled=(len(st.session_state.teams) < 3)):
+if st.button("Generate Groups", type="primary", width='stretch', disabled=(len(st.session_state.teams) < 3)):
     shuffled = random.sample(st.session_state.teams, len(st.session_state.teams))
     st.session_state.groups = {f"Group {chr(65 + i)}": [] for i in range(num_g)}
     for i, t in enumerate(shuffled):

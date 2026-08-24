@@ -4,6 +4,7 @@ import streamlit as st
 import db
 import sidebar
 import ui
+from utils import get_active_tournament_id
 
 ui.inject_global_css()
 sidebar.render()
@@ -15,13 +16,13 @@ if st.session_state.get('role') != "Team Captain":
     st.info("Only users registered as **Team Captain** can register a team here.")
     st.stop()
 
-owner = st.session_state.get('linked_owner')
-tname = st.session_state.get('tournament_name')
-if not owner or not tname:
+tournament_id = get_active_tournament_id()
+tournament = db.get_tournament(tournament_id) if tournament_id else None
+if not tournament:
     st.warning("Your account isn't linked to a tournament. Please contact your organizer.")
     st.stop()
 
-st.caption(f"Registering for **{ui.esc(tname)}**, organized by **{ui.esc(owner)}**")
+st.caption(f"Registering for **{ui.esc(tournament['tournament_name'])}**, organized by **{ui.esc(tournament['owner_username'])}**")
 
 my_teams = db.get_teams_for_captain(st.session_state.username)
 
@@ -46,7 +47,7 @@ else:
         contact_email = st.text_input("Contact Email")
         contact_phone = st.text_input("Contact Phone")
         players_raw = st.text_area("Players (one per line)", height=150)
-        submitted = st.form_submit_button("Register Team", type="primary", use_container_width=True)
+        submitted = st.form_submit_button("Register Team", type="primary", width='stretch')
         if submitted:
             players = [p.strip() for p in players_raw.splitlines() if p.strip()]
             if not team_name.strip():
@@ -54,13 +55,13 @@ else:
             elif not players:
                 st.warning("Add at least one player.")
             else:
-                existing = {t['team_name'] for t in db.get_teams_for_owner(owner)}
+                existing = {t['team_name'] for t in db.get_teams_for_tournament(tournament_id)}
                 if team_name.strip() in existing:
                     st.error("A team with this name is already registered for this tournament.")
                 else:
                     db.create_team(
-                        team_name=team_name.strip(), captain_username=st.session_state.username,
-                        owner_username=owner, tournament_name=tname,
+                        tournament_id=tournament_id, team_name=team_name.strip(),
+                        captain_username=st.session_state.username,
                         contact_email=contact_email.strip(), contact_phone=contact_phone.strip(),
                         players=players,
                     )

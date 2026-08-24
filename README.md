@@ -34,11 +34,15 @@ That's the only required config — the app creates its tables automatically on 
 
 ## Roles
 
-- **Admin / Tournament Organizer** — run a tournament: set its name, manage grounds/umpires, approve team registrations and new accounts, generate groups/schedule, enter results, run the knockout bracket.
-- **Team Captain** — after an organizer approves their account, registers their team's roster on the "My Team" page; the team needs a second approval (from the organizer) before it appears in the tournament.
+- **Admin / Tournament Organizer** — can own **multiple tournaments** (switch or create new ones from the "My Tournaments" picker on Tournament Setup); for whichever one is active, they set its name, manage grounds/umpires, approve team registrations, generate groups/schedule, enter results, and run the knockout bracket. Registering as a Tournament Organizer or Admin requires approval from an existing **Admin** specifically (a peer Tournament Organizer can't approve that, only participant-facing signups).
+- **Team Captain** — after their account is approved, registers their team's roster on the "My Team" page for the one tournament they joined at signup; the team needs a second approval (from that tournament's organizer) before it appears.
 - **Player** — view-only account, auto-approved at signup.
 
-Admins get a **User Management** page (sidebar) for direct CRUD on accounts and roles — approve, change role, delete, or create an account outright without going through self-registration.
+Tournament names are **globally unique** across the whole app — that's what lets anyone browse or join one by name alone, with no "by <organizer>" qualifier needed to tell two tournaments apart.
+
+Admins get a **User Management** page (sidebar) for direct CRUD on accounts and roles — approve, change role, delete, or create an account outright without going through self-registration — plus a **Tournaments** section to delete any organizer's tournament (organizers can only delete their own).
+
+Nobody needs an account to browse: **Home, League Schedule, League Results, and Knock Out Fixture** are open to anyone, with a "Browse a Tournament" picker in the sidebar to choose which one to view. Every other page still requires login.
 
 ## Branding
 

@@ -3,16 +3,20 @@ import streamlit as st
 
 import sidebar
 import ui
-from utils import save_tourney_data, is_organizer
+from utils import save_tourney_data, is_organizer, get_active_tournament_id
 
 ui.inject_global_css()
 sidebar.render()
-ui.guard_login()
 
 ui.page_header("Knock Out Fixture", "Set up the bracket, assign officials, and record winners.", "🏅")
+if not st.session_state.user_logged_in and st.session_state.get('tournament_name'):
+    st.caption(f"Viewing: **{ui.esc(st.session_state.tournament_name)}** — switch tournaments from the sidebar.", unsafe_allow_html=True)
 
 if not st.session_state.teams:
-    ui.empty_state("Add teams first on the Tournament Setup page.")
+    ui.empty_state(
+        "No teams registered yet." if get_active_tournament_id()
+        else "No tournaments have been set up yet — pick one from the sidebar once one exists."
+    )
     st.stop()
 
 STAGES = [
@@ -51,7 +55,7 @@ for stage_name, match_ids in STAGES:
                     winner = st.selectbox("Winner", winner_options,
                                            index=winner_options.index(match['winner']) if match.get('winner') in winner_options else 0,
                                            key=f"{m_id}_winner")
-                    if st.button("Save", key=f"{m_id}_save", use_container_width=True):
+                    if st.button("Save", key=f"{m_id}_save", width='stretch'):
                         st.session_state.knockout_matches[m_id] = {
                             'teams': [t1, t2],
                             'ground': ground if ground != "TBD" else None,

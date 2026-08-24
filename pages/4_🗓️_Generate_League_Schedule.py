@@ -4,13 +4,14 @@ import streamlit as st
 
 import sidebar
 import ui
-from utils import save_tourney_data, is_organizer, generate_intelligent_schedule
+from utils import save_tourney_data, is_organizer, generate_intelligent_schedule, tourney_widget_key
 
 ui.inject_global_css()
 sidebar.render()
-ui.guard_login()
 
 ui.page_header("League Schedule", "Automated team-as-umpire round-robin scheduling.", "🗓️")
+if not st.session_state.user_logged_in and st.session_state.get('tournament_name'):
+    st.caption(f"Viewing: **{ui.esc(st.session_state.tournament_name)}** — switch tournaments from the sidebar.", unsafe_allow_html=True)
 if is_organizer():
     st.caption(
         "Matches are grouped into rounds where no team repeats, so different grounds can share the same "
@@ -24,19 +25,21 @@ if not st.session_state.groups:
     st.stop()
 
 if is_organizer():
+    _start_time_key = tourney_widget_key("start_time_input")
+
     def _update_start_time():
-        st.session_state.start_time = st.session_state.start_time_input
+        st.session_state.start_time = st.session_state[_start_time_key]
         save_tourney_data()
 
-    st.time_input("League Start Time", value=st.session_state.start_time, key="start_time_input", on_change=_update_start_time)
+    st.time_input("League Start Time", value=st.session_state.start_time, key=_start_time_key, on_change=_update_start_time)
     if not st.session_state.grounds:
         st.warning("Add at least one ground on the Manage Resources page before generating a schedule.")
     c1, c2 = st.columns(2)
-    if c1.button("Generate", type="primary", use_container_width=True, disabled=not st.session_state.grounds):
+    if c1.button("Generate", type="primary", width='stretch', disabled=not st.session_state.grounds):
         st.session_state.schedule = generate_intelligent_schedule(st.session_state.groups, st.session_state.start_time)
         save_tourney_data()
         st.rerun()
-    if c2.button("Clear Schedule", use_container_width=True):
+    if c2.button("Clear Schedule", width='stretch'):
         st.session_state.schedule = []
         save_tourney_data()
         st.rerun()
@@ -68,7 +71,7 @@ if is_organizer():
 
     edited_df = st.data_editor(
         df,
-        use_container_width=True,
+        width='stretch',
         hide_index=True,
         num_rows="fixed",
         column_config={

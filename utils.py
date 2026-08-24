@@ -8,23 +8,27 @@ import db
 
 # --- Tournament context ---------------------------------------------------
 
-def get_tourney_owner_and_name():
-    """Every tournament is namespaced by its organizer's username + a
-    tournament name. Organizers/Admins own their own tournament(s); Team
-    Captains/Players are linked to the tournament they joined at signup."""
+def get_active_tournament_id():
+    """An organizer/admin can own several tournaments; `active_tournament_id`
+    is whichever one they're currently working on (switchable on Tournament
+    Setup). Team Captains/Players are linked to the single tournament they
+    joined at signup. A visitor who isn't logged in views whichever
+    tournament they picked from the sidebar's public browser (see
+    sidebar.py)."""
     role = st.session_state.get('role')
     if role in ("Admin", "Tournament Organizer"):
-        return st.session_state.get('username'), st.session_state.get('tournament_name', 'Default Tournament')
-    return st.session_state.get('linked_owner'), st.session_state.get('linked_tournament')
+        return st.session_state.get('active_tournament_id')
+    if role in ("Team Captain", "Player"):
+        return st.session_state.get('linked_tournament_id')
+    return st.session_state.get('public_tournament_id')
 
 
 def save_tourney_data():
-    owner, _ = get_tourney_owner_and_name()
-    if not owner:
+    tid = get_active_tournament_id()
+    if not tid:
         return
-    tname = st.session_state.tournament_name
     tourney_data = {
-        'tournament_name': tname, 'teams': st.session_state.teams,
+        'tournament_name': st.session_state.tournament_name, 'teams': st.session_state.teams,
         'grounds': st.session_state.grounds, 'umpires': st.session_state.umpires,
         'groups': st.session_state.groups, 'waiver_link': st.session_state.waiver_link,
         'schedule': [{**m, 'time': m['time'].strftime('%H:%M:%S')} for m in st.session_state.schedule],
@@ -34,7 +38,7 @@ def save_tourney_data():
         'checklist_data': st.session_state.get('checklist_data', []),
         'flyer_image': st.session_state.get('flyer_image'),
     }
-    db.save_tournament_data(owner, tname, tourney_data)
+    db.save_tournament_data(tid, tourney_data)
 
 
 # --- State initialization --------------------------------------------------
@@ -44,17 +48,21 @@ def initialize_state_base():
         st.session_state.user_logged_in = False
         st.session_state.username = None
         st.session_state.role = None
-        st.session_state.linked_owner = None
-        st.session_state.linked_tournament = None
+        st.session_state.linked_tournament_id = None
+        st.session_state.active_tournament_id = None
+        st.session_state.public_tournament_id = None
         st.session_state.app_init = True
+        # Seeds teams/groups/schedule/etc to safe empty defaults even
+        # before any tournament is picked, so pages that read them
+        # directly (not via .get()) don't crash for a brand-new visitor.
+        load_tournament_state()
 
 
 def load_tournament_state():
-    owner, tname = get_tourney_owner_and_name()
-    tourney_data = db.load_tournament_data(owner) if owner else {}
-    is_new = not tourney_data
+    tid = get_active_tournament_id()
+    tourney_data = db.load_tournament_data(tid) if tid else {}
 
-    st.session_state.tournament_name = tourney_data.get('tournament_name', tname or "New Tournament")
+    st.session_state.tournament_name = tourney_data.get('tournament_name', "New Tournament")
     st.session_state.teams = tourney_data.get('teams', [])
     st.session_state.grounds = tourney_data.get('grounds', [])
     st.session_state.umpires = tourney_data.get('umpires', [])
@@ -81,11 +89,22 @@ def load_tournament_state():
         }
     st.session_state.knockout_matches = knockout_matches
 
-    # Persist the freshly-initialized state right away so the tournament
-    # shows up for team captains/players to join, even before the
-    # organizer has made any changes.
-    if is_new and st.session_state.get('role') in ("Admin", "Tournament Organizer"):
-        save_tourney_data()
+
+# The Tournament Name / Waiver Link / League Start Time widgets keep their
+# own value client-side once mounted. Popping their session_state key isn't
+# enough to reset them: on the next rerun the frontend just re-reports its
+# last cached value as if the user had typed it, which fires their
+# on_change callback and writes the stale value straight back into the
+# freshly-reset data. Call this after resetting tournament data from
+# outside the widget's own on_change (e.g. after deleting a tournament) —
+# it bumps a generation counter so those widgets get a brand new key and
+# genuinely remount instead of reattaching stale client state.
+def clear_tournament_widget_cache():
+    st.session_state['tourney_widget_gen'] = st.session_state.get('tourney_widget_gen', 0) + 1
+
+
+def tourney_widget_key(base: str) -> str:
+    return f"{base}_{st.session_state.get('tourney_widget_gen', 0)}"
 
 
 # --- Helper functions --------------------------------------------------
@@ -157,12 +176,21 @@ def _assign_neutral_umpires(schedule):
 
 def generate_intelligent_schedule(groups, start_time):
     """
-    Generates a round-robin schedule for each group using the circle method,
-    so matches within the same round involve no repeated team and can be
-    played at the same start time across different grounds. A round that has
-    more matches than available grounds spills its extra matches into the
-    next time slot before the following round begins. Umpires are assigned
-    afterward by _assign_neutral_umpires, once every match's time is known.
+    Generates a round-robin schedule using the circle method, so matches
+    within the same round involve no repeated team and can be played at the
+    same start time across different grounds.
+
+    Groups are interleaved round-by-round (every group's round 1 is packed
+    together before any group's round 2 begins) rather than scheduled one
+    group at a time — a group only produces a couple of matches per round,
+    which would leave most grounds idle for the group's entire run if
+    groups went fully sequential. Interleaving spreads round 1 of every
+    group across ALL available grounds first, so a tournament with as many
+    grounds as groups can run nearly every group in parallel. A combined
+    round that has more matches than available grounds spills its extra
+    matches into the next time slot before the following round begins.
+    Umpires are assigned afterward by _assign_neutral_umpires, once every
+    match's time is known.
     """
     grounds = st.session_state.get('grounds') or ['Ground 1']
     num_grounds = len(grounds)
@@ -171,19 +199,27 @@ def generate_intelligent_schedule(groups, start_time):
     base_time = datetime.combine(datetime.today(), start_time)
     slot = 0
 
-    for group_name, teams in groups.items():
-        for round_pairs in _round_robin_rounds(teams):
-            for i, (team1, team2) in enumerate(round_pairs):
-                ground = grounds[i % num_grounds]
-                match_time = (base_time + (slot + i // num_grounds) * match_duration).time()
-                schedule.append({
-                    'teams': [team1, team2],
-                    'group': group_name,
-                    'ground': ground,
-                    'umpire': None,
-                    'time': match_time,
-                })
-            slot += -(-len(round_pairs) // num_grounds)  # ceil(matches / grounds)
+    group_rounds = {name: _round_robin_rounds(teams) for name, teams in groups.items()}
+    max_rounds = max((len(rounds) for rounds in group_rounds.values()), default=0)
+
+    for round_idx in range(max_rounds):
+        combined = [
+            (group_name, pair)
+            for group_name, rounds in group_rounds.items()
+            if round_idx < len(rounds)
+            for pair in rounds[round_idx]
+        ]
+        for i, (group_name, (team1, team2)) in enumerate(combined):
+            ground = grounds[i % num_grounds]
+            match_time = (base_time + (slot + i // num_grounds) * match_duration).time()
+            schedule.append({
+                'teams': [team1, team2],
+                'group': group_name,
+                'ground': ground,
+                'umpire': None,
+                'time': match_time,
+            })
+        slot += -(-len(combined) // num_grounds)  # ceil(matches / grounds)
 
     _assign_neutral_umpires(schedule)
     return schedule

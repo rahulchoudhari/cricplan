@@ -5,13 +5,18 @@ import db
 import images
 import sidebar
 import ui
-from utils import save_tourney_data, get_tourney_owner_and_name
+from utils import save_tourney_data, get_active_tournament_id
 
 ui.inject_global_css()
 sidebar.render()
 ui.guard_organizer()
 
 ui.page_header("Manage Resources", "Add grounds, umpires, and sponsors for the tournament.", "🏏")
+
+active_id = get_active_tournament_id()
+if not active_id:
+    ui.empty_state("Create or select a tournament on the Tournament Setup page first.")
+    st.stop()
 
 c1, c2 = st.columns(2)
 with c1:
@@ -58,16 +63,18 @@ st.markdown("---")
 st.subheader("🤝 Sponsors")
 st.caption("Shown as a scrolling logo strip on your tournament's home page.")
 
-owner, _ = get_tourney_owner_and_name()
-sponsors = db.get_sponsors(owner)
+sponsors = db.get_sponsors(active_id)
 
 if sponsors:
     cols = st.columns(4)
     for i, s in enumerate(sponsors):
         with cols[i % 4]:
-            st.image(f"data:image/png;base64,{s['image_data']}", width=120)
+            if s.get('image_data'):
+                st.image(f"data:image/png;base64,{s['image_data']}", width=120)
+            else:
+                st.markdown(f"**{ui.esc(s['sponsor_name'])}**", unsafe_allow_html=True)
             st.caption(s['sponsor_name'])
-            if st.button("🗑️ Remove", key=f"del_sponsor_{s['id']}", use_container_width=True):
+            if st.button("🗑️ Remove", key=f"del_sponsor_{s['id']}", width='stretch'):
                 db.delete_sponsor(s['id'])
                 st.rerun()
 else:
@@ -77,16 +84,14 @@ with st.form("add_sponsor", clear_on_submit=True):
     st.markdown("**Add a sponsor**")
     sp_name = st.text_input("Sponsor Name")
     sp_link = st.text_input("Website Link (optional)")
-    sp_logo = st.file_uploader("Sponsor Logo", type=["png", "jpg", "jpeg", "webp"])
+    sp_logo = st.file_uploader("Sponsor Logo (optional)", type=["png", "jpg", "jpeg", "webp"])
     if st.form_submit_button("Add Sponsor"):
         if not sp_name.strip():
             st.warning("Sponsor name is required.")
-        elif sp_logo is None:
-            st.warning("Please upload a logo image.")
         else:
             try:
-                image_data = images.process_upload(sp_logo, max_dim=400)
-                db.add_sponsor(owner, sp_name.strip(), image_data, sp_link.strip() or None)
+                image_data = images.process_upload(sp_logo, max_dim=400) if sp_logo is not None else None
+                db.add_sponsor(active_id, sp_name.strip(), image_data, sp_link.strip() or None)
                 st.rerun()
             except images.UploadTooLarge as e:
                 st.error(str(e))

@@ -5,7 +5,7 @@ import db
 import images
 import sidebar
 import ui
-from utils import save_tourney_data, is_organizer, get_tourney_owner_and_name
+from utils import save_tourney_data, is_organizer, get_active_tournament_id, load_tournament_state, clear_tournament_widget_cache, tourney_widget_key
 
 ui.inject_global_css()
 sidebar.render()
@@ -22,13 +22,68 @@ if not is_organizer():
         ui.empty_state("No teams have been added yet.")
     st.stop()
 
-# --- Organizer's view ---
+# --- Organizer's view: switch between / create tournaments -----------------
+me = st.session_state.username
+my_tournaments = db.get_tournaments_for_owner(me)
+active_id = get_active_tournament_id()
+
+if my_tournaments:
+    names = [t['tournament_name'] for t in my_tournaments]
+    ids = [t['id'] for t in my_tournaments]
+    current_idx = ids.index(active_id) if active_id in ids else 0
+    c1, c2 = st.columns([3, 1])
+    with c1:
+        picked_name = st.selectbox("My Tournaments", names, index=current_idx, key=tourney_widget_key("tourney_switcher"))
+    picked_id = ids[names.index(picked_name)]
+    if picked_id != active_id:
+        st.session_state.active_tournament_id = picked_id
+        load_tournament_state()
+        clear_tournament_widget_cache()
+        st.rerun()
+else:
+    st.info("You don't have any tournaments yet — create one below to get started.")
+
+with st.expander("➕ Create a new tournament", expanded=not my_tournaments):
+    with st.form("create_tournament_form", clear_on_submit=True):
+        new_tourney_name = st.text_input("Tournament Name")
+        if st.form_submit_button("Create", type="primary"):
+            new_tourney_name = new_tourney_name.strip()
+            if not new_tourney_name:
+                st.warning("Enter a tournament name.")
+            else:
+                new_id = db.create_tournament(me, new_tourney_name)
+                if new_id is None:
+                    st.error(f'A tournament named "{new_tourney_name}" already exists — tournament names must be unique. Pick a different name.')
+                else:
+                    st.session_state.active_tournament_id = new_id
+                    load_tournament_state()
+                    clear_tournament_widget_cache()
+                    st.success(f'Created "{new_tourney_name}".')
+                    st.rerun()
+
+if not active_id:
+    st.stop()
+
+st.markdown("---")
+
+# --- Rename (must stay globally unique) -------------------------------------
+_name_key = tourney_widget_key("tournament_name_input")
+
+
 def _rename_tournament():
-    st.session_state.tournament_name = st.session_state.tournament_name_input
-    save_tourney_data()
+    new_name = st.session_state[_name_key].strip()
+    if not new_name or new_name == st.session_state.tournament_name:
+        return
+    if db.rename_tournament(active_id, new_name):
+        st.session_state.tournament_name = new_name
+    else:
+        st.session_state['_rename_error'] = new_name
 
 
-st.text_input("Tournament Name", value=st.session_state.tournament_name, key="tournament_name_input", on_change=_rename_tournament)
+st.text_input("Tournament Name", value=st.session_state.tournament_name, key=_name_key, on_change=_rename_tournament)
+rename_error = st.session_state.pop('_rename_error', None)
+if rename_error:
+    st.error(f'"{rename_error}" is already taken by another tournament — still named "{st.session_state.tournament_name}".')
 
 st.markdown("#### 🖼️ Tournament Flyer")
 flyer = st.session_state.get('flyer_image')
@@ -49,8 +104,7 @@ else:
             st.error(str(e))
 st.markdown("---")
 
-owner, tname = get_tourney_owner_and_name()
-pending_teams = [t for t in db.get_teams_for_owner(owner) if not t['approved']]
+pending_teams = [t for t in db.get_teams_for_tournament(active_id) if not t['approved']]
 
 if pending_teams:
     st.markdown("#### 🧢 Pending team registrations")
@@ -65,14 +119,14 @@ if pending_teams:
                 if t.get('contact_email') or t.get('contact_phone'):
                     st.caption(f"Contact: {t.get('contact_email') or ''} {t.get('contact_phone') or ''}".strip())
             with c2:
-                if st.button("✅ Approve", key=f"approve_team_{t['id']}", use_container_width=True):
+                if st.button("✅ Approve", key=f"approve_team_{t['id']}", width='stretch'):
                     db.approve_team(t['id'])
                     if t['team_name'] not in st.session_state.teams:
                         st.session_state.teams.append(t['team_name'])
                         save_tourney_data()
                     st.rerun()
             with c3:
-                if st.button("🗑️ Reject", key=f"reject_team_{t['id']}", use_container_width=True):
+                if st.button("🗑️ Reject", key=f"reject_team_{t['id']}", width='stretch'):
                     db.delete_team(t['id'])
                     st.rerun()
     st.markdown("---")
@@ -100,3 +154,22 @@ if st.session_state.teams:
             st.rerun()
 else:
     ui.empty_state("No teams registered yet — add one above, or wait for team captains to self-register.")
+
+st.markdown("---")
+with st.expander("⚠️ Danger Zone"):
+    st.warning(
+        "Deleting this tournament permanently removes its teams, groups, schedule, results, knockout "
+        "bracket, checklist, flyer, and sponsors. Team captains and players linked to it keep their "
+        "accounts but are unlinked from it. This cannot be undone."
+    )
+    current_name = st.session_state.tournament_name
+    confirm = st.text_input(f'Type "{current_name}" to confirm deletion', key="delete_tournament_confirm")
+    if st.button("Delete This Tournament", type="primary", disabled=(confirm != current_name)):
+        db.delete_tournament(active_id)
+        remaining = [t for t in my_tournaments if t['id'] != active_id]
+        st.session_state.active_tournament_id = remaining[0]['id'] if remaining else None
+        st.session_state.tournament_name = "New Tournament"
+        load_tournament_state()
+        clear_tournament_widget_cache()
+        st.success("Tournament deleted.")
+        st.rerun()

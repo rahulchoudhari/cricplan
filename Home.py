@@ -4,38 +4,51 @@ import streamlit as st
 import db
 import sidebar
 import ui
-from utils import get_tourney_owner_and_name
+from utils import get_active_tournament_id
 
 st.set_page_config(page_title="Cricket Scheduler Pro", page_icon="assets/logo.png", layout="wide")
 ui.inject_global_css()
 sidebar.render()
 
-# --- Main Page Content ---
-tname = st.session_state.get('tournament_name', 'Cricket Scheduler Pro')
-if st.session_state.user_logged_in:
-    ui.hero(tname, "Your tournament command center", "🏆")
+
+def _tournament_overview(subtitle: str) -> None:
+    tname = st.session_state.get('tournament_name', 'Cricket Scheduler Pro')
+    ui.hero(tname, subtitle, "🏆")
 
     flyer = st.session_state.get('flyer_image')
     if flyer:
         fc1, fc2, fc3 = st.columns([1, 2, 1])
         with fc2:
-            st.image(f"data:image/png;base64,{flyer}", use_container_width=True)
+            st.image(f"data:image/png;base64,{flyer}", width='stretch')
 
-    owner, _ = get_tourney_owner_and_name()
-    if owner:
-        ui.sponsor_carousel(db.get_sponsors(owner))
-
-    st.subheader("Welcome to your Tournament Dashboard")
-    st.info("Use the navigation panel on the left to manage your tournament.")
+    tid = get_active_tournament_id()
+    if tid:
+        ui.sponsor_carousel(db.get_sponsors(tid))
 
     if st.session_state.get('teams'):
         c1, c2, c3 = st.columns(3)
         c1.metric("Teams Registered", len(st.session_state.get('teams', [])))
         c2.metric("Groups Created", len(st.session_state.get('groups', {})))
         c3.metric("League Matches", len(st.session_state.get('schedule', [])))
+
+
+# --- Main Page Content ---
+if st.session_state.user_logged_in:
+    _tournament_overview("Your tournament command center")
+    st.subheader("Welcome to your Tournament Dashboard")
+    st.info("Use the navigation panel on the left to manage your tournament.")
+
+elif st.session_state.get('public_tournament_id'):
+    _tournament_overview("Browsing as a guest")
+    st.info(
+        "Use the navigation panel on the left for the League Schedule, League Results, and Knockout "
+        "Fixture — no login required. Log in or register from the sidebar if you're a team captain, "
+        "player, or organizer."
+    )
+
 else:
     ui.hero("Cricket Scheduler Pro", "The all-in-one platform to plan, schedule and run your cricket tournament.", "🏆")
-    st.markdown("Please **login** or **register** using the panel on the left to begin.")
+    st.markdown("No tournaments have been set up yet. Please **login** or **register** using the panel on the left to begin.")
     c1, c2, c3 = st.columns(3)
     with c1:
         with st.container(border=True):

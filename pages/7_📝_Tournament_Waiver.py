@@ -3,7 +3,7 @@ import streamlit as st
 
 import sidebar
 import ui
-from utils import save_tourney_data, is_organizer
+from utils import save_tourney_data, is_organizer, tourney_widget_key
 
 ui.inject_global_css()
 sidebar.render()
@@ -14,12 +14,14 @@ ui.page_header("Tournament Waiver", "Share the waiver form participants must com
 PREVIOUS_YEAR_WAIVER_LINK = "https://forms.gle/2ppu8vXRqP8D75Zb7"
 
 if is_organizer():
+    _waiver_key = tourney_widget_key("waiver_link_input")
+
     def _update_waiver_link():
-        st.session_state.waiver_link = st.session_state.waiver_link_input
+        st.session_state.waiver_link = st.session_state[_waiver_key]
         save_tourney_data()
 
     st.info("As an organizer, you can set the public link for the waiver form.")
-    st.text_input("Set Waiver Form Link", value=st.session_state.waiver_link, key="waiver_link_input", on_change=_update_waiver_link)
+    st.text_input("Set Waiver Form Link", value=st.session_state.waiver_link, key=_waiver_key, on_change=_update_waiver_link)
     st.caption(
         f"Don't have this year's form ready yet? [Last year's waiver form]({PREVIOUS_YEAR_WAIVER_LINK}) "
         "can be used as a reference, or copied and updated, until the new one is set."

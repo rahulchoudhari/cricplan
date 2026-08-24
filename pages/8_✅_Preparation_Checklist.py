@@ -70,7 +70,7 @@ df = pd.DataFrame(st.session_state.checklist_data)
 edited_df = st.data_editor(
     df,
     num_rows="dynamic",
-    use_container_width=True,
+    width='stretch',
     column_config={
         "Section": st.column_config.SelectboxColumn(
             "Section",
