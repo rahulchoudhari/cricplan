@@ -41,6 +41,7 @@ def save_tourney_data():
         'tournament_name': st.session_state.tournament_name, 'teams': st.session_state.teams,
         'grounds': st.session_state.grounds, 'umpires': st.session_state.umpires,
         'groups': st.session_state.groups, 'waiver_link': st.session_state.waiver_link,
+        'registration_link': st.session_state.registration_link,
         'schedule': [{**m, 'time': m['time'].strftime('%H:%M:%S')} for m in st.session_state.schedule],
         'league_results': st.session_state.league_results,
         'knockout_matches': st.session_state.knockout_matches,
@@ -79,6 +80,7 @@ def load_tournament_state():
     st.session_state.groups = tourney_data.get('groups', {})
     st.session_state.league_results = tourney_data.get('league_results', {})
     st.session_state.waiver_link = tourney_data.get('waiver_link', "")
+    st.session_state.registration_link = tourney_data.get('registration_link', "")
     st.session_state.start_time = datetime.strptime(tourney_data.get('start_time', '08:00:00'), '%H:%M:%S').time()
 
     st.session_state.checklist_data = tourney_data.get('checklist_data', [])

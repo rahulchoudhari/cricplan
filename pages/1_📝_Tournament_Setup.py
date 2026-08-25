@@ -127,6 +127,20 @@ else:
             st.error(str(e))
 st.markdown("---")
 
+# --- Registration link (e.g. a Google Form for team/player sign-up) -------
+_reg_link_key = tourney_widget_key("registration_link_input")
+
+def _update_registration_link():
+    st.session_state.registration_link = st.session_state[_reg_link_key]
+    save_tourney_data()
+
+st.markdown("#### 🔗 Registration Link")
+st.caption("Paste the registration form link (e.g. a Google Form) team captains and players should fill out to join this tournament.")
+st.text_input("Registration Form Link", value=st.session_state.registration_link, key=_reg_link_key, on_change=_update_registration_link)
+if st.session_state.registration_link:
+    st.caption(f"[Open the registration form]({st.session_state.registration_link})")
+st.markdown("---")
+
 # --- Managers (owner only -- delegating access, so only an owner grants it) -
 if is_owner:
     st.markdown("#### 👥 Managers")

@@ -15,6 +15,12 @@ def _tournament_overview(subtitle: str) -> None:
     tname = st.session_state.get('tournament_name', 'Cricket Scheduler Pro')
     ui.hero(tname, subtitle, "🏆")
 
+    registration_link = st.session_state.get('registration_link')
+    if registration_link:
+        rc1, rc2, rc3 = st.columns([1, 2, 1])
+        with rc2:
+            st.link_button("📝 Register Your Team", registration_link, width='stretch', type="primary")
+
     flyer = st.session_state.get('flyer_image')
     if flyer:
         fc1, fc2, fc3 = st.columns([1, 2, 1])
